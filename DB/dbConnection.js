@@ -59,7 +59,7 @@ export default function dbConnection() {
             CREATE TABLE IF NOT EXISTS logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 action TEXT NOT NULL,
-                status TEXT,
+                status TEXT CHECK(status IN ('success', 'error', 'warning')),
                 message TEXT,
                 order_index INTEGER,
                 order_id INTEGER,
