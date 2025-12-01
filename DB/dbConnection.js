@@ -59,11 +59,11 @@ export default function dbConnection() {
             CREATE TABLE IF NOT EXISTS logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 action TEXT NOT NULL,
-                status TEXT CHECK(status IN ('success', 'error', 'warning')),
+                status TEXT CHECK(status IN ('success', 'error', 'warning')) DEFAULT 'success',
                 message TEXT,
-                order_index INTEGER,
-                order_id INTEGER,
-                clientOrderId TEXT,
+                order_index INTEGER NULL,
+                order_id INTEGER NULL,
+                clientOrderId TEXT NULL,
                 timestamp INTEGER DEFAULT (strftime('%s','now'))
             )
         `).run();
