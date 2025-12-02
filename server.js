@@ -45,16 +45,16 @@ app.get("/orders", (req, res) => {
 });
 
 
-// GET order by order_id
-app.get("/orders/:order_id", (req, res) => {
+// GET order by id
+app.get("/orders/:id", (req, res) => {
   try {
-    const order_id = req.params.order_id;
+    const id = req.params.id;
 
     const row = db.prepare(`
       SELECT * FROM orders
-      WHERE order_id = ?
+      WHERE id = ?
       LIMIT 1
-    `).get(order_id);
+    `).get(id);
 
     if (!row) {
       return res.status(404).json({ error: "Order not found" });
@@ -165,9 +165,9 @@ app.post("/api/save-log", (req, res) => {
 });
 
 // UPDATE order by order_id (partial update)
-app.put("/orders/:order_id", (req, res) => {
+app.put("/orders/:order_index", (req, res) => {
   try {
-    const order_id = req.params.order_id;
+    const order_index = req.params.order_index;
     const data = req.body; // fields to update
 
     // Convert body keys to SQL fields:   { status: "closed", pnl_usdt: 12 }
@@ -183,10 +183,10 @@ app.put("/orders/:order_id", (req, res) => {
     const stmt = db.prepare(`
       UPDATE orders
       SET ${setClause}
-      WHERE order_id = ?
+      WHERE id = ?
     `);
 
-    const result = stmt.run(...values, order_id);
+    const result = stmt.run(...values, order_index);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: "Order not found" });
