@@ -10,5 +10,3 @@ export function broadcast(message) {
     }
   });
 }
-
-console.log("WebSocket server running on ws://localhost:3002");

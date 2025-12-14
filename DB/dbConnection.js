@@ -68,6 +68,45 @@ export default function dbConnection() {
             )
         `).run();
 
+        // TABLE: market state
+        db.prepare(`
+            CREATE TABLE IF NOT EXISTS market_state (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                symbol TEXT NOT NULL,
+
+                price REAL NOT NULL,            -- Current price always exists
+
+                buyWalls INTEGER,               -- Number of buy walls (nullable)
+                sellWalls INTEGER,              -- Number of sell walls (nullable)
+
+                nearestBuyPrice REAL,           -- Null if no wall
+                nearestBuyStrength REAL,
+                nearestBuyDistance REAL,
+
+                nearestSellPrice REAL,          -- Null if no wall
+                nearestSellStrength REAL,
+                nearestSellDistance REAL,
+
+                trend TEXT,                     -- up/down/neutral (nullable if undefined)
+
+                recentVolatility REAL,          -- Recent Candle volatility
+
+                updatedAt TEXT NOT NULL         -- Timestamp always exists
+            );
+        `).run();
+
+        // TABLE: scanner
+        db.prepare(`
+            CREATE TABLE IF NOT EXISTS scanner (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol TEXT NOT NULL,
+                score REAL NOT NULL,
+                volatility REAL NOT NULL,
+                updatedAt TEXT NOT NULL
+            )
+        `).run();
+
         console.log("✓ Database connected and all tables ensured.");
     }
 
