@@ -92,6 +92,10 @@ export default function dbConnection() {
 
                 recentVolatility REAL,          -- Recent Candle volatility
 
+                position TEXT,                  -- Position recommendation (JSON)
+
+                candles TEXT,                   -- Last 3 candles data (JSON)
+
                 updatedAt TEXT NOT NULL         -- Timestamp always exists
             );
         `).run();
@@ -103,9 +107,46 @@ export default function dbConnection() {
                 symbol TEXT NOT NULL,
                 score REAL NOT NULL,
                 volatility REAL NOT NULL,
+                candles TEXT,                   -- Last 3 candles data (JSON)
                 updatedAt TEXT NOT NULL
             )
         `).run();
+
+        // TABLE: settings
+        db.prepare(`
+            CREATE TABLE IF NOT EXISTS settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tsls REAL DEFAULT 20,
+                tps REAL DEFAULT 60,
+                minVol REAL DEFAULT 1.5,
+                maxVol REAL DEFAULT 8,
+                minVol24 REAL DEFAULT 500000,
+                maxVol24 REAL DEFAULT 5000000,
+                leverage REAL DEFAULT 2,
+                blackList TEXT DEFAULT '[]',
+                updatedAt TEXT NOT NULL
+            )
+        `).run();
+
+        // Initialize settings with default data if table is empty
+        const settingsCount = db.prepare(`SELECT COUNT(*) as count FROM settings`).get();
+        if (settingsCount.count === 0) {
+            db.prepare(`
+                INSERT INTO settings (tsls, tps, minVol, maxVol, minVol24, maxVol24, leverage, blackList, updatedAt)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+                20,          // tsls
+                60,          // tps
+                1.5,         // minVol
+                8,           // maxVol
+                500000,      // minVol24
+                5000000,     // maxVol24
+                2,           // leverage
+                '[]',        // blackList (empty array as JSON string)
+                new Date().toISOString()  // updatedAt
+            );
+            console.log("✓ Settings table initialized with default values.");
+        }
 
         console.log("✓ Database connected and all tables ensured.");
     }

@@ -91,8 +91,8 @@ app.get("/market-state", (req, res) => {
 app.post("/market-state", (req, res) => {
   try {
     const marketState = req.body;
-    const stmt = db.prepare("INSERT INTO market_state (symbol, price, buyWalls, sellWalls, nearestBuyPrice, nearestBuyStrength, nearestBuyDistance, nearestSellPrice, nearestSellStrength, nearestSellDistance, trend, recentVolatility, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    const result = stmt.run(marketState.symbol, marketState.price, marketState.buyWalls, marketState.sellWalls, marketState.nearestBuyPrice, marketState.nearestBuyStrength, marketState.nearestBuyDistance, marketState.nearestSellPrice, marketState.nearestSellStrength, marketState.nearestSellDistance, marketState.trend, marketState.recentVolatility, marketState.updatedAt);
+    const stmt = db.prepare("INSERT INTO market_state (symbol, price, buyWalls, sellWalls, nearestBuyPrice, nearestBuyStrength, nearestBuyDistance, nearestSellPrice, nearestSellStrength, nearestSellDistance, trend, recentVolatility, position, candles, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    const result = stmt.run(marketState.symbol, marketState.price, marketState.buyWalls, marketState.sellWalls, marketState.nearestBuyPrice, marketState.nearestBuyStrength, marketState.nearestBuyDistance, marketState.nearestSellPrice, marketState.nearestSellStrength, marketState.nearestSellDistance, marketState.trend, marketState.recentVolatility, marketState.position || null, marketState.candles || null, marketState.updatedAt);
     
     // Notify dashboard
     broadcast({ type: "market_state_updated" });
@@ -108,13 +108,51 @@ app.put("/market-state/:symbol", (req, res) => {
   try {
     const symbol = req.params.symbol;
     const data = req.body;
-    const stmt = db.prepare("UPDATE market_state SET price = ?, buyWalls = ?, sellWalls = ?, nearestBuyPrice = ?, nearestBuyStrength = ?, nearestBuyDistance = ?, nearestSellPrice = ?, nearestSellStrength = ?, nearestSellDistance = ?, trend = ?, recentVolatility = ?, updatedAt = ? WHERE symbol = ?");
-    const result = stmt.run(data.price, data.buyWalls, data.sellWalls, data.nearestBuyPrice, data.nearestBuyStrength, data.nearestBuyDistance, data.nearestSellPrice, data.nearestSellStrength, data.nearestSellDistance, data.trend, data.recentVolatility, data.updatedAt, symbol);
+    const stmt = db.prepare("UPDATE market_state SET price = ?, buyWalls = ?, sellWalls = ?, nearestBuyPrice = ?, nearestBuyStrength = ?, nearestBuyDistance = ?, nearestSellPrice = ?, nearestSellStrength = ?, nearestSellDistance = ?, trend = ?, recentVolatility = ?, position = ?, candles = ?, updatedAt = ? WHERE symbol = ?");
+    const result = stmt.run(data.price, data.buyWalls, data.sellWalls, data.nearestBuyPrice, data.nearestBuyStrength, data.nearestBuyDistance, data.nearestSellPrice, data.nearestSellStrength, data.nearestSellDistance, data.trend, data.recentVolatility, data.position || null, data.candles || null, data.updatedAt, symbol);
     
     // Notify dashboard
     broadcast({ type: "market_state_updated" });
     
     res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE market state by symbol
+app.delete("/market-state/:symbol", (req, res) => {
+  try {
+    const symbol = req.params.symbol;
+    const stmt = db.prepare("DELETE FROM market_state WHERE symbol = ?");
+    const result = stmt.run(symbol);
+
+    // Notify dashboard
+    broadcast({ type: "market_state_updated" });
+
+    res.json({ success: true, changes: result.changes });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE stale market state entries (older than specified seconds)
+app.delete("/market-state/stale/:seconds", (req, res) => {
+  try {
+    const seconds = parseInt(req.params.seconds);
+    const cutoffTime = new Date(Date.now() - seconds * 1000).toISOString();
+    
+    const stmt = db.prepare("DELETE FROM market_state WHERE updatedAt < ?");
+    const result = stmt.run(cutoffTime);
+
+    // Notify dashboard
+    broadcast({ type: "market_state_updated" });
+
+    res.json({ 
+      success: true, 
+      deletedCount: result.changes,
+      cutoffTime: cutoffTime
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -251,8 +289,8 @@ app.put("/orders/:order_index", (req, res) => {
 app.post("/api/save-scanner", (req, res) => {
   try {
     const scanner = req.body;
-    const stmt = db.prepare("INSERT INTO scanner (symbol, score, volatility, updatedAt) VALUES (?, ?, ?, ?)");
-    const result = stmt.run(scanner.symbol, scanner.score, scanner.volatility, scanner.updatedAt);
+    const stmt = db.prepare("INSERT INTO scanner (symbol, score, volatility, candles, updatedAt) VALUES (?, ?, ?, ?, ?)");
+    const result = stmt.run(scanner.symbol, scanner.score, scanner.volatility, scanner.candles || null, scanner.updatedAt);
 
     // Notify dashboard
     broadcast({ type: "scanner_updated" });
@@ -276,13 +314,12 @@ app.get("/api/get-scanner", (req, res) => {
 });
 
 // UPDATE scanner by symbol
-
 app.put("/api/update-scanner/:symbol", (req, res) => {
   try {
     const symbol = req.params.symbol;
     const data = req.body;
-    const stmt = db.prepare("UPDATE scanner SET score = ?, volatility = ?, updatedAt = ? WHERE symbol = ?");
-    const result = stmt.run(data.score, data.volatility, data.updatedAt, symbol);
+    const stmt = db.prepare("UPDATE scanner SET score = ?, volatility = ?, candles = ?, updatedAt = ? WHERE symbol = ?");
+    const result = stmt.run(data.score, data.volatility, data.candles || null, data.updatedAt, symbol);
     
     // Notify dashboard
     broadcast({ type: "scanner_updated" });
@@ -309,6 +346,68 @@ app.delete("/api/delete-scanner/:symbol", (req, res) => {
   } 
   catch (err) {
     console.error("Error deleting scanner:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET settings
+app.get("/api/settings", (req, res) => {
+  try {
+    const row = db.prepare("SELECT * FROM settings LIMIT 1").get();
+    
+    if (!row) {
+      return res.status(404).json({ error: "Settings not found" });
+    }
+
+    // Parse blackList from JSON string to array
+    const settings = {
+      ...row,
+      blackList: JSON.parse(row.blackList || '[]')
+    };
+
+    res.json(settings);
+  } catch (err) {
+    console.error("Error getting settings:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT update settings
+app.put("/api/settings", (req, res) => {
+  try {
+    const { tsls, tps, minVol, maxVol, minVol24, maxVol24, leverage, blackList } = req.body;
+
+    // Convert blackList array to JSON string
+    const blackListStr = JSON.stringify(blackList || []);
+
+    const stmt = db.prepare(`
+      UPDATE settings 
+      SET tsls = ?, tps = ?, minVol = ?, maxVol = ?, minVol24 = ?, maxVol24 = ?, leverage = ?, blackList = ?, updatedAt = ?
+      WHERE id = 1
+    `);
+
+    const result = stmt.run(
+      tsls,
+      tps,
+      minVol,
+      maxVol,
+      minVol24,
+      maxVol24,
+      leverage,
+      blackListStr,
+      new Date().toISOString()
+    );
+
+    if (result.changes === 0) {
+      return res.status(404).json({ error: "Settings not found" });
+    }
+
+    // Notify dashboard
+    broadcast({ type: "settings_updated" });
+
+    res.json({ success: true, message: "Settings updated successfully" });
+  } catch (err) {
+    console.error("Error updating settings:", err);
     res.status(500).json({ error: err.message });
   }
 });
